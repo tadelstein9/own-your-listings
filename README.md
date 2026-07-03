@@ -4,7 +4,7 @@ A local-first toolkit for listing your **own** inventory on eBay through the Sel
 
 It grew out of a plain discovery: **you can't just upload a listing to eBay anymore.** The old flat-file / bulk path is all but gone for the ordinary seller; the one programmatic door left is the API, and the API makes you become a registered developer to walk through it. This is a working, honest reference implementation of that walk — built while listing vintage watches and parts.
 
-> Companion essay: *"You Can't Just Sell on eBay Anymore"* — Unfound Exits (link here once published).
+> Companion essay: [*"You Can't Just Sell on eBay Anymore"*](https://tomadelstein.substack.com/p/you-cant-just-sell-on-ebay-anymore) — Unfound Exits.
 
 ## What it does
 
