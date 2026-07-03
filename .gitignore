@@ -1,0 +1,27 @@
+# ---- SECRETS: never commit real credentials or tokens ----
+ebay_credentials*.json
+ebay_app.json
+etsy_app.json
+etsy_token.json
+*credential*
+*secret*
+*token*.json
+# ...but keep the redacted templates
+!*.example
+
+# ---- local data (yours, not for the repo) ----
+*.db
+*.sqlite
+*.sqlite3
+photos/
+photos-inbox/
+vmshare/
+raw2x/
+
+# ---- python ----
+__pycache__/
+*.pyc
+.venv/
+env/
+
+.DS_Store

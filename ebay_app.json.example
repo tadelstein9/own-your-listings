@@ -1,0 +1,8 @@
+{
+  "_comment": "eBay Sell API config. Create your business policies (fulfillment/payment/return) and an inventory location in Seller Hub, then paste their IDs here. This file holds NO secrets. Copy to ebay_app.json and fill in.",
+  "marketplace_id": "EBAY_US",
+  "fulfillment_policy_id": "PASTE_FULFILLMENT_POLICY_ID",
+  "payment_policy_id": "PASTE_PAYMENT_POLICY_ID",
+  "return_policy_id": "PASTE_RETURN_POLICY_ID",
+  "merchant_location_key": "YOUR_LOCATION_KEY"
+}
