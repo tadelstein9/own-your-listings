@@ -92,6 +92,7 @@ meta = {
     "condition": "FOR_PARTS_OR_NOT_WORKING",
     "condition_description": COND_DESC,
     "category_id": 57720,                # Parts, Tools & Guides > Parts > Movements
+    "store_category": "Movements",       # your eBay Store category (GetStore), not "Other"
     "aspects": {
         "Brand": ["Unitas"],
         "Compatible Brand": ["ETA"],

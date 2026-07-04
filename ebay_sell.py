@@ -102,7 +102,7 @@ def build_inventory(gi, meta):
 
 
 def build_offer(slug, gi, meta, app, qty):
-    return {
+    offer = {
         "sku": meta["sku"],
         "marketplaceId": app["marketplace_id"],
         "format": "FIXED_PRICE",
@@ -119,6 +119,13 @@ def build_offer(slug, gi, meta, app, qty):
             "currency": gi.get("currency", "USD")}},
         "merchantLocationKey": app["merchant_location_key"],
     }
+    # Optional eBay Store category. Path form "/Top" or "/Top/Sub"; the name must
+    # match one of your store's custom categories (Trading API GetStore). Without
+    # it, the item lands in the store's default "Other".
+    sc = meta.get("store_category")
+    if sc:
+        offer["storeCategoryNames"] = [sc if sc.startswith("/") else "/" + sc]
+    return offer
 
 
 def list_item(token, slug, dry_run):
