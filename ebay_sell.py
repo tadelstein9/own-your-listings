@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""ebay_sell.py — eBay Sell API write path (DRAFT-ONLY) on Stanley's keyset.
+"""ebay_sell.py — eBay Sell API write path (DRAFT-ONLY) on your own keyset.
 
 `--check`  : read Sell-API readiness (scopes, business policies, locations). No writes.
 `--list S` : build an eBay DRAFT for library item slug S:
                createOrReplaceInventoryItem (SKU) + createOffer (NO publishOffer = draft).
              Reads recovered data from photos/<slug>/ebay_getitem.json, clean copy +
              overrides from photos/<slug>/ebay_meta.json, policies/location from ebay_app.json.
-             Nothing goes live — the offer sits unpublished in Seller Hub until Tom publishes.
+             Nothing goes live — the offer sits unpublished in Seller Hub until you publish.
 
 Usage:
   python3 ebay_sell.py --check
@@ -178,7 +178,7 @@ def list_item(token, slug, dry_run):
 
 def publish_offer(token, slug):
     """Seller-triggered: flip an UNPUBLISHED offer live. This is the publish trigger --
-    only run on Tom's explicit say-so (BYOK: the seller pulls it, the tool never auto-publishes)."""
+    only run on the seller's explicit say-so (BYOK: the seller pulls it, the tool never auto-publishes)."""
     rec_path = os.path.join(HERE, "photos", slug, "ebay_offer.json")
     if not os.path.exists(rec_path):
         sys.exit(f"{slug}: no ebay_offer.json -- run --list first to create the draft")

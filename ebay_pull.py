@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """ebay_pull.py — recover a seller's own eBay listings via Trading API GetItem.
 
-Runs as the TOKEN OWNER. For Tom that means Stanley Adelstein's keyset
-(ebay_credentials_backup.json) — NOT the Bynari/Paul app. GetItem returns the
+Runs as the TOKEN OWNER — the keyset for your own selling account
+(ebay_credentials.json). GetItem returns the
 full listing (title, description, item specifics, condition, price, photos) for
 an item number, including ENDED listings within eBay's ~90-day window.
 
@@ -30,7 +30,7 @@ import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(HERE, "library.db")
-DEFAULT_CREDS = "/home/tom/Projects/eBay_Tools/ebay_credentials_backup.json"  # Stanley's keyset
+DEFAULT_CREDS = os.path.join(HERE, "ebay_credentials.json")  # your keyset; override with --creds
 
 TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
 TRADING_URL = "https://api.ebay.com/ws/api.dll"
@@ -65,8 +65,8 @@ def refresh_access_token(creds):
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", "replace")
         sys.exit(f"\nTOKEN REFRESH FAILED ({e.code}).\n  {detail}\n"
-                 "  If 'invalid_grant', Stanley's refresh token expired/was revoked —\n"
-                 "  re-auth once via MDs_SCRIPTS_DOCS/GROK/Uploader/get_ebay_tokens.py.")
+                 "  If 'invalid_grant', your refresh token expired or eBay revoked it —\n"
+                 "  run your OAuth consent flow again to mint a new one.")
 
 
 # --- GetItem ---------------------------------------------------------------

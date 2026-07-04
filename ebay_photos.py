@@ -7,7 +7,7 @@ Cloned LOGIC (not the app) from the hahm-ebay-lister study: the REST Inventory
 API can't take binaries, so photos go through the OLD Trading API call
 `UploadSiteHostedPictures` (multipart XML + image) using the same OAuth token /
 IAF header pattern as ebay_pull.py. Returns EPS FullURLs. Local-first, BYOK,
-runs as the token owner (Stanley's keyset).
+runs as the token owner (your keyset).
 
 Usage:
   python3 ebay_photos.py --files a.jpg b.jpg          # upload, print EPS URLs
