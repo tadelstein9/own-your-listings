@@ -2,8 +2,10 @@
 """One-shot intake for a single loose Swiss Unitas/ETA 6498 pocket-watch movement,
 signed ARNEX TIME Co INC, 17 jewels, unadjusted. NOT running -- sold strictly for
 parts / repair / hobbyist: complete, good freely-moving balance, likely needs a new
-mainspring. Modeled on Tom's SOLD comp (UT 6498 GOOD BALANCE (M4), $124.95, Pre-owned
-Good, eBay category 3937 Pocket Watches). Creates the library item + ebay_meta.json.
+mainspring. Priced from Tom's SOLD comp (UT 6498 GOOD BALANCE (M4), $124.95). A comp gives
+you the PRICE, never the category: that comp sat in 3937 Pocket Watches, but a loose movement
+belongs in 57720 (Parts > Movements) -- filing it in the comp's category silently strips the
+movement's item specifics. Creates the library item + ebay_meta.json.
 Does NOT touch eBay -- run ebay_photos.py then ebay_sell.py after.
 
   python3 examples/build_movement.py
@@ -71,30 +73,36 @@ create = {"brand": "Unitas", "what": "loose pocket watch movement (for parts/rep
 slug = studio.create_item(create, files)
 print(f"\ncreated item slug = {slug}")
 
-# eBay draft meta consumed by ebay_sell.py (category 3937 per Tom's sold comp).
+# eBay draft meta consumed by ebay_sell.py.
+# CATEGORY: a loose movement is NOT a pocket watch. It lives in 57720 --
+#   Watches, Parts & Accessories > Parts, Tools & Guides > Parts > Movements.
+# Item specifics (aspects) are scoped PER category. The aspects below are the ones
+# category 57720 actually defines -- verified against the live listing. Filing this in
+# the comp's category (3937 Pocket Watches) SILENTLY drops every specific 57720 doesn't
+# share: eBay errors only on a category's REQUIRED fields, then publishes the rest wrong
+# without complaint. Best practice: derive category + aspects from the eBay Taxonomy API
+# (getCategorySuggestions + getItemAspectsForCategory), never from a comp.
 meta = {
     "sku": SKU,
     "title": TITLE,
     "description": DESC,
     "price": 124.95,
     "quantity": 1,
-    # cat 3937 rejects USED_GOOD -> use FOR_PARTS_OR_NOT_WORKING (not running) or USED_EXCELLENT (Pre-owned)
+    # FOR_PARTS_OR_NOT_WORKING = honest (not running) and valid for this category.
     "condition": "FOR_PARTS_OR_NOT_WORKING",
     "condition_description": COND_DESC,
-    "category_id": 3937,                 # Watches, Parts & Accessories > Pocket Watches (comp's category)
+    "category_id": 57720,                # Parts, Tools & Guides > Parts > Movements
     "aspects": {
-        "Department": ["Unisex Adult"],  # REQUIRED by cat 3937, else publishOffer 25002
         "Brand": ["Unitas"],
+        "Compatible Brand": ["ETA"],
         "Type": ["Movement"],
-        "Caliber": ["6498"],
-        "Model": ["UT 6498"],
         "Movement Type": ["Mechanical (Manual)"],
-        "Jewels": ["17"],
-        "Size": ["16.5 Lignes (~36.6 mm)"],
-        "Country/Region of Manufacture": ["Switzerland"],
-        "Escapement Type": ["Lever"],
-        "Signed": ["Arnex Time Co Inc"],
-        "Vintage": ["Yes"],
+        "Unit Type": ["Unit"],
+        "Compatible Model": ["ETA 6498"],
+        "Material": ["Nickel"],
+        "MPN": ["UT6498"],
+        "Unit Quantity": ["1"],
+        "Country of Origin": ["Switzerland"],
     },
 }
 meta_path = os.path.join(LIB, "photos", slug, "ebay_meta.json")

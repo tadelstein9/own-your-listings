@@ -58,7 +58,11 @@ python3 ebay_sell.py --publish <slug>
 
 ## A note on category quirks
 
-eBay validates the condition and the required item specifics **only at publish time, and one error at a time.** For example, the Pocket Watches category (`3937`) rejects the `USED_GOOD` condition and requires a `Department` specific — neither shows up until you try to publish. You learn a category's rules by walking into them, so write them into your item template once and they're paid for.
+Two traps, and the second is the dangerous one.
+
+**Loud failures.** eBay validates the condition and a category's *required* item specifics **only at publish time, and one error at a time** — neither shows up until you call `publishOffer`. Annoying, but they throw errors you can read and bake into your template once.
+
+**Silent failures — the real trap.** Item specifics are scoped **per category**, and eBay does *not* error on specifics that don't belong to the category you chose — it simply drops them. Pick the wrong category and the listing publishes *successfully* with half its specifics gone, filed under the wrong part of the site. That happened while building this: a loose movement first went up in Pocket Watches (`3937`, borrowed from a sold comp), and eBay silently discarded the movement fields — no error, a bad listing. The correct home is **Movements (`57720`)**, a different category with a different aspect vocabulary. A comp gives you the *price*; it does not give you the *category*. Pull the category and its aspects from the Taxonomy API (`getCategorySuggestions` + `getItemAspectsForCategory`) rather than a comp, and `publishOffer` succeeding will actually mean the listing is right.
 
 ## Security
 
