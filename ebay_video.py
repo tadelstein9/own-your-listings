@@ -25,7 +25,7 @@ import urllib.error
 
 import ebay_pull
 
-MEDIA = "https://api.ebay.com/commerce/media/v1_beta"
+MEDIA = "https://apim.ebay.com/commerce/media/v1_beta"  # Media API rides the apim gateway, NOT api.ebay.com
 
 
 def _json(method, token, path, body=None):
