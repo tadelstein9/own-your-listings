@@ -21,7 +21,8 @@ import urllib.parse
 import urllib.request
 import urllib.error
 
-import ebay_pull  # load_creds / refresh_access_token
+import ebay_pull      # load_creds / refresh_access_token
+import ebay_validate  # A7 pre-flight gate (Taxonomy + Metadata)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SELL_BASE = "https://api.ebay.com"
@@ -131,10 +132,24 @@ def build_offer(slug, gi, meta, app, qty):
     return offer
 
 
-def list_item(token, slug, dry_run):
+def list_item(token, slug, dry_run, force=False):
     gi, meta = load_item(slug)
     if not meta.get("sku"):
         sys.exit(f"{slug}: ebay_meta.json needs an sku")
+
+    # A7 pre-flight -- refuse to send a listing eBay would silently botch
+    # (wrong category, missing required aspect, invalid condition).
+    problems = ebay_validate.validate(token, meta)
+    if problems:
+        print("PRE-FLIGHT FAILED:")
+        for p in problems:
+            print(f"   x {p}")
+        if not force:
+            sys.exit("  refusing to list. Fix ebay_meta.json, or re-run with --force to override.")
+        print("  --force: proceeding despite pre-flight failures.")
+    else:
+        print("pre-flight OK: category, condition, and required aspects all valid.")
+
     app = load_app()
     inv, qty = build_inventory(gi, meta)
     offer = build_offer(slug, gi, meta, app, qty)
@@ -212,6 +227,7 @@ def main():
     ap.add_argument("--verify", metavar="SLUG")
     ap.add_argument("--publish", metavar="SLUG")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--force", action="store_true", help="list even if the pre-flight gate fails")
     ap.add_argument("--creds", default=ebay_pull.DEFAULT_CREDS)
     args = ap.parse_args()
     creds = ebay_pull.load_creds(args.creds)
@@ -223,7 +239,7 @@ def main():
     elif args.publish:
         publish_offer(token, args.publish)
     elif args.list:
-        list_item(token, args.list, args.dry_run)
+        list_item(token, args.list, args.dry_run, args.force)
     elif args.verify:
         rec = json.load(open(os.path.join(HERE, "photos", args.verify, "ebay_offer.json")))
         code, data = _req("GET", token, f"/sell/inventory/v1/offer/{rec['offer_id']}")
