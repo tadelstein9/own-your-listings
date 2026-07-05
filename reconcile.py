@@ -12,7 +12,7 @@ others, keep the local catalog (library.db) as the source of truth. Local + BYOK
 FB has no seller API -> its rows are 'manual'; reconcile prints a task instead of delisting.
 Only eBay detect+delist are implemented here; Etsy is stubbed (see AUTODELIST_DESIGN.md §6).
 """
-import argparse, datetime, json, os, sqlite3, sys, urllib.error, urllib.request
+import argparse, datetime, json, os, sqlite3, sys, urllib.error, urllib.parse, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -82,6 +82,68 @@ def ebay_delist(token, offer_id, apply):
     print(f"    ! withdraw {offer_id} failed [{status}]: {str(d)[:160]}"); return False
 
 
+# ---- Etsy HTTP ------------------------------------------------------------
+# Needs etsy_credentials.json: {"client_id": "<keystring>", "refresh_token": "...", "shop_id": 12345}
+# client_id doubles as the x-api-key. Token scopes needed: transactions_r, listings_w.
+ETSY_API = "https://api.etsy.com/v3/application"
+ETSY_TOKEN_URL = "https://api.etsy.com/v3/public/oauth/token"
+
+
+def etsy_creds():
+    p = os.path.join(HERE, "etsy_credentials.json")
+    return json.load(open(p)) if os.path.exists(p) else None
+
+
+def etsy_token(creds):
+    body = urllib.parse.urlencode({
+        "grant_type": "refresh_token", "client_id": creds["client_id"],
+        "refresh_token": creds["refresh_token"]}).encode()
+    req = urllib.request.Request(ETSY_TOKEN_URL, data=body, method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)["access_token"]
+
+
+def _etsy_req(method, creds, token, path, body=None):
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(ETSY_API + path, data=data, method=method, headers={
+        "x-api-key": creds["client_id"], "Authorization": "Bearer " + token,
+        "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=90) as r:
+            raw = r.read(); return r.status, (json.loads(raw) if raw else {})
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8", "replace")
+        try: return e.code, json.loads(raw)
+        except Exception: return e.code, raw
+
+
+def etsy_detect_sales(creds, token, since_epoch):
+    """Return [(listing_id, qty)] for shop receipts created since since_epoch (unix seconds)."""
+    status, d = _etsy_req("GET", creds, token,
+        f"/shops/{creds['shop_id']}/receipts?min_created={since_epoch}&limit=100")
+    if status != 200:
+        print(f"  ! Etsy getShopReceipts HTTP {status}: {str(d)[:160]}"); return []
+    sold = []
+    for r in d.get("results", []):
+        for t in r.get("transactions", []):
+            if t.get("listing_id"):
+                sold.append((str(t["listing_id"]), int(t.get("quantity", 1))))
+    return sold
+
+
+def etsy_delist(creds, token, listing_id, apply):
+    if not apply:
+        print(f"    [dry-run] would set Etsy listing {listing_id} inactive"); return True
+    # updateListing -> state=inactive. (Verify content-type against live Etsy on first run;
+    # some Etsy write endpoints want application/x-www-form-urlencoded.)
+    status, d = _etsy_req("PATCH", creds, token,
+        f"/shops/{creds['shop_id']}/listings/{listing_id}", {"state": "inactive"})
+    if status in (200, 204):
+        print(f"    set Etsy listing {listing_id} inactive [{status}]"); return True
+    print(f"    ! Etsy delist {listing_id} failed [{status}]: {str(d)[:140]}"); return False
+
+
 # ---- catalog helpers ------------------------------------------------------
 def register(con, slug, channel, external_id, external_ref, status):
     it = con.execute("SELECT id FROM items WHERE slug=?", (slug,)).fetchone()
@@ -107,36 +169,61 @@ def status_report(con):
 
 
 # ---- the loop -------------------------------------------------------------
+def _find_item(con, channel, key):
+    """Map a detected sale back to a catalog item id. eBay keys on SKU (=slug); others on external_id."""
+    if channel == "ebay":
+        r = con.execute("SELECT id FROM items WHERE slug=?", (key.lower(),)).fetchone()
+        return r["id"] if r else None
+    r = con.execute("SELECT item_id FROM listings WHERE channel=? AND external_id=?",
+                    (channel, str(key))).fetchone()
+    return r["item_id"] if r else None
+
+
 def run(con, apply):
-    creds = json.load(open(os.path.join(HERE, "ebay_credentials.json")))
-    token = ebay_pull.refresh_access_token(creds)
+    tag = "APPLY" if apply else "dry-run"
     last = con.execute("SELECT value FROM settings WHERE key='reconcile.last_run'").fetchone()
-    since = last["value"] if last else (
+    since_z = last["value"] if last else (
         datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
     ).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-    print(f"eBay: detecting sales since {since}  ({'APPLY' if apply else 'dry-run'})")
+    since_epoch = int(datetime.datetime.strptime(since_z, "%Y-%m-%dT%H:%M:%S.000Z")
+                      .replace(tzinfo=datetime.timezone.utc).timestamp())
 
-    sold = ebay_detect_sales(token, since)
-    if not sold: print("  no sold SKUs in window.")
-    for sku, qty in sold:
-        print(f"  SOLD on eBay: {sku} x{qty}")
-        it = con.execute("SELECT id FROM items WHERE slug=?", (sku.lower(),)).fetchone()
-        if not it:
-            print(f"    (no catalog item for sku {sku} -- skipping)"); continue
-        con.execute("UPDATE listings SET status='sold' WHERE item_id=? AND channel='ebay'", (it["id"],))
-        con.execute("UPDATE items SET state='sold' WHERE id=?", (it["id"],))
-        others = con.execute("SELECT * FROM listings WHERE item_id=? AND channel!='ebay' "
-                             "AND status='active'", (it["id"],)).fetchall()
+    # eBay auth (required); Etsy auth (optional -- activates when creds present)
+    etoken = ebay_pull.refresh_access_token(json.load(open(os.path.join(HERE, "ebay_credentials.json"))))
+    ec = etsy_creds()
+    etsy_t = etsy_token(ec) if ec else None
+
+    print(f"detecting sales since {since_z}  ({tag})")
+    sold = [("ebay", sku, q) for sku, q in ebay_detect_sales(etoken, since_z)]
+    if ec:
+        sold += [("etsy", lid, q) for lid, q in etsy_detect_sales(ec, etsy_t, since_epoch)]
+    else:
+        print("  (etsy: no etsy_credentials.json -- Etsy sale-detection skipped)")
+    if not sold:
+        print("  no sales in window.")
+
+    for channel, key, qty in sold:
+        item_id = _find_item(con, channel, key)
+        if not item_id:
+            print(f"  SOLD on {channel}: {key} -- no catalog item, skipping"); continue
+        print(f"  SOLD on {channel}: {key} x{qty}")
+        con.execute("UPDATE listings SET status='sold' WHERE item_id=? AND channel=?", (item_id, channel))
+        con.execute("UPDATE items SET state='sold' WHERE id=?", (item_id,))
+        others = con.execute("SELECT * FROM listings WHERE item_id=? AND channel!=? AND status='active'",
+                             (item_id, channel)).fetchall()
         for o in others:
-            if o["channel"] == "fb":
-                print(f"    MANUAL: end FB listing for {sku}")
+            ok = False
+            if o["channel"] == "ebay":
+                ok = ebay_delist(etoken, o["external_ref"], apply)
             elif o["channel"] == "etsy":
-                print(f"    TODO(etsy adapter): set listing {o['external_id']} inactive")
-            else:
-                ok = ebay_delist(token, o["external_ref"], apply)
-                if ok and apply:
-                    con.execute("UPDATE listings SET status='ended', ended_at=? WHERE id=?",
-                                (now_z(), o["id"]))
+                if ec:
+                    ok = etsy_delist(ec, etsy_t, o["external_id"], apply)
+                else:
+                    print(f"    MANUAL: end Etsy listing {o['external_id']} (no etsy_credentials.json)")
+            elif o["channel"] == "fb":
+                print(f"    MANUAL: end FB listing for item {item_id}")
+            if ok and apply:
+                con.execute("UPDATE listings SET status='ended', ended_at=? WHERE id=?", (now_z(), o["id"]))
     if apply:
         con.execute("INSERT INTO settings(key,value) VALUES('reconcile.last_run',?) "
                     "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (now_z(),))
