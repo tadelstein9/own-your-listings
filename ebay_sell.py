@@ -90,6 +90,9 @@ def build_inventory(gi, meta):
         product["brand"] = specifics["Brand"]
     if specifics.get("MPN"):
         product["mpn"] = specifics["MPN"]
+    vids = meta.get("video_ids")          # eBay Media API videoIds (see ebay_video.py)
+    if vids:
+        product["videoIds"] = vids if isinstance(vids, list) else [vids]
     qty = int(meta.get("quantity", gi.get("quantity") or 1))
     inv = {
         "availability": {"shipToLocationAvailability": {"quantity": qty}},
