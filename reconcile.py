@@ -107,8 +107,9 @@ def etsy_token(creds):
 def _etsy_req(method, creds, token, path, body=None):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(ETSY_API + path, data=data, method=method, headers={
-        "x-api-key": creds["client_id"], "Authorization": "Bearer " + token,
-        "Content-Type": "application/json"})
+        # Etsy v3 wants keystring:shared_secret in x-api-key (both parts), not the keystring alone
+        "x-api-key": f"{creds['client_id']}:{creds['shared_secret']}",
+        "Authorization": "Bearer " + token, "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=90) as r:
             raw = r.read(); return r.status, (json.loads(raw) if raw else {})
