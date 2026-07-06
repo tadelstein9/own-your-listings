@@ -72,7 +72,7 @@ for c in CONFIG:
             "price": float(em["price"]), "quantity": 1, "condition": c["condition"],
             "condition_description": em["description"].split("\n\n")[0][:800],
             "category_id": c["category"],
-            "store_category": "Movements" if c["category"] == 57720 else None,
+            "store_category": "Movements" if c["category"] == 57720 else "Pocket Watches",
             "aspects": c["aspects"]}
     json.dump(meta, open(os.path.join(LIB, "photos", slug, "ebay_meta.json"), "w"), indent=2)
     print(f"{slug}: {len(jpgs)} photos, cat {c['category']}, ${em['price']}, title({len(title)})")

@@ -117,6 +117,8 @@ def build_offer(slug, gi, meta, app, qty):
             "fulfillmentPolicyId": app["fulfillment_policy_id"],
             "paymentPolicyId": app["payment_policy_id"],
             "returnPolicyId": app["return_policy_id"],
+            # Best Offer is a free negotiation/surfacing lever -- on by default (meta can disable).
+            "bestOfferTerms": {"bestOfferEnabled": bool(meta.get("best_offer", True))},
         },
         "pricingSummary": {"price": {
             "value": str(meta.get("price") or gi.get("price")),
