@@ -2,7 +2,7 @@
 """studio.py — a local screen for your own inventory + listing workflow.
 
 Runs on your machine, talks to nobody but you. It is a thin shell over the
-scripts you already proved (preview.py, etsy_push.py, ebay_sell.py): it does
+script you already proved (ebay_sell.py): it does
 NOT contain listing logic, so it cannot break a listing — it only stages data
 and presses the buttons you would otherwise type.
 
@@ -12,9 +12,8 @@ What it does:
   - New item  : drop photos + answer a few prompts -> writes the items row and
                 copies the photos into photos/<slug>/, the same shape as every
                 existing item. From that moment the item is in inventory.
-  - Edit      : fill the channel fields (Etsy or eBay) -> writes the sidecar
-                (etsy_meta.json / ebay_meta.json) the push scripts read.
-  - Preview   : runs preview.py and shows the page.
+  - Edit      : fill the eBay fields -> writes the sidecar
+                (ebay_meta.json) the push script reads.
   - Dry run   : runs the push script with --dry-run (sends nothing).
   - Create draft: runs the push script for real (still a DRAFT; you publish).
 
@@ -170,12 +169,11 @@ def view_list():
         thumb = rep_thumb(slug)
         img = (f"<img src='/photos/{urllib.parse.quote(slug)}/{urllib.parse.quote(thumb)}'>"
                if thumb else "<div class=tag style='height:140px'>no photo</div>")
-        etsy = "Etsy✓" if load_sidecar(slug, "etsy_draft.json") else ""
         ebay = "eBay✓" if load_sidecar(slug, "ebay_offer.json") else ""
         price = f"${it['price']:.2f}" if it["price"] is not None else "—"
         cards.append(
             f"<div class=card><a href='/item/{urllib.parse.quote(slug)}'>{img}</a>"
-            f"<div class=tag>{html.escape(it['state'] or 'new')} {etsy} {ebay}</div>"
+            f"<div class=tag>{html.escape(it['state'] or 'new')} {ebay}</div>"
             f"<div><a href='/item/{urllib.parse.quote(slug)}'>"
             f"{html.escape(it['title'] or it['what'] or slug)}</a></div>"
             f"<div class=price>{price}</div></div>")
@@ -215,7 +213,6 @@ def view_item(slug):
     con.close()
     if not it:
         return None
-    et = load_sidecar(slug, "etsy_meta.json")
     eb = load_sidecar(slug, "ebay_meta.json")
     folder = os.path.join(PHOTOS, slug)
     photos = sorted(f for f in os.listdir(folder) if f.lower().endswith(IMG_EXT)) \
@@ -232,12 +229,8 @@ def view_item(slug):
             x = dflt
         return html.escape("" if x is None else str(x))
 
-    etsy_drafted = load_sidecar(slug, "etsy_draft.json")
     ebay_offered = load_sidecar(slug, "ebay_offer.json")
     status = []
-    if etsy_drafted:
-        status.append(f"<a href='{html.escape(etsy_drafted.get('edit_url','#'))}' "
-                      f"target=_blank>Etsy draft {etsy_drafted.get('listing_id','')}</a>")
     if ebay_offered:
         status.append(f"eBay offer {html.escape(str(ebay_offered.get('offer_id','')))} "
                       f"({html.escape(str(ebay_offered.get('state','')))})")
@@ -262,20 +255,9 @@ def view_item(slug):
         <div><label>Price</label><input type=number step=0.01 name=price value='{v(it,'price')}'></div>
       </div>
 
-      <h2>Etsy fields</h2>
-      <div class=note>For Etsy, get a taxonomy id with:
-        <code>python3 etsy.py taxonomy &lt;keyword&gt;</code>. who_made=someone_else for vintage resale.</div>
-      <div class=row>
-        <div><label>who_made</label><input type=text name=etsy_who_made value='{v(et,'who_made') or 'someone_else'}'></div>
-        <div><label>when_made (e.g. 1970s)</label><input type=text name=etsy_when_made value='{v(et,'when_made')}'></div>
-        <div><label>taxonomy_id</label><input type=text name=etsy_taxonomy_id value='{v(et,'taxonomy_id')}'></div>
-      </div>
-      <label>tags (comma separated, &le;13)</label><input type=text name=etsy_tags value='{v(et,'tags_csv') or ','.join(et.get('tags',[]))}'>
-      <label>materials (comma separated)</label><input type=text name=etsy_materials value='{','.join(et.get('materials',[]))}'>
-
       <h2>eBay fields</h2>
       <div class=note>eBay needs a SKU and a category id. Net-new photos must be hosted
-        (public URLs) before the eBay draft can carry images — Etsy takes local files directly.</div>
+        (public URLs) before the eBay draft can carry images.</div>
       <div class=row>
         <div><label>SKU</label><input type=text name=ebay_sku value='{v(eb,'sku') or slug}'></div>
         <div><label>category_id</label><input type=text name=ebay_category_id value='{v(eb,'category_id')}'></div>
@@ -288,15 +270,7 @@ def view_item(slug):
     <h2>Stage the listing</h2>
     <form method=post action='/run' style='display:inline'>
       <input type=hidden name=slug value='{html.escape(slug)}'>
-      <input type=hidden name=channel value='etsy'>
-      <button class='btn ghost' name=action value='preview' style='color:#222'>Preview Etsy</button>
-      <button class='btn alt' name=action value='dryrun'>Etsy dry run</button>
-      <button class='btn' name=action value='draft'>Create Etsy draft</button>
-    </form>
-    <form method=post action='/run' style='display:inline'>
-      <input type=hidden name=slug value='{html.escape(slug)}'>
       <input type=hidden name=channel value='ebay'>
-      <button class='btn ghost' name=action value='preview' style='color:#222'>Preview eBay</button>
       <button class='btn alt' name=action value='dryrun'>eBay dry run</button>
       <button class='btn' name=action value='draft'>Create eBay draft</button>
     </form>
@@ -360,24 +334,6 @@ def save_fields(slug, fields):
     con.commit()
     con.close()
 
-    def csv(name):
-        return [x.strip() for x in fields.get(name, "").split(",") if x.strip()]
-
-    etsy = load_sidecar(slug, "etsy_meta.json")
-    etsy.update({
-        "title": fields.get("title", "").strip() or None,
-        "description": fields.get("description", "").strip() or None,
-        "price": float(fields["price"]) if fields.get("price", "").strip() else None,
-        "who_made": fields.get("etsy_who_made", "").strip() or "someone_else",
-        "when_made": fields.get("etsy_when_made", "").strip() or None,
-        "taxonomy_id": int(fields["etsy_taxonomy_id"]) if fields.get("etsy_taxonomy_id", "").strip().isdigit() else None,
-        "tags": csv("etsy_tags")[:13],
-        "materials": csv("etsy_materials"),
-        "quantity": 1,
-        "type": "physical",
-    })
-    write_sidecar(slug, "etsy_meta.json", etsy)
-
     ebay = load_sidecar(slug, "ebay_meta.json")
     ebay.update({
         "sku": fields.get("ebay_sku", "").strip() or slug,
@@ -394,12 +350,7 @@ def save_fields(slug, fields):
 def run_script(slug, channel, action):
     """Shell out to the proven scripts. Returns combined output text."""
     py = sys.executable
-    if action == "preview":
-        cmd = [py, "preview.py", "--item", slug, "--channel", channel]
-    elif channel == "etsy":
-        cmd = [py, "etsy_push.py", "--item", slug] + (["--dry-run"] if action == "dryrun" else [])
-    else:
-        cmd = [py, "ebay_sell.py", "--list", slug] + (["--dry-run"] if action == "dryrun" else [])
+    cmd = [py, "ebay_sell.py", "--list", slug] + (["--dry-run"] if action == "dryrun" else [])
     try:
         p = subprocess.run(cmd, cwd=LIB, capture_output=True, text=True, timeout=180)
         out = (p.stdout or "") + (("\n[stderr]\n" + p.stderr) if p.stderr else "")
@@ -475,7 +426,7 @@ class H(BaseHTTPRequestHandler):
             return self._redirect(f"/item/{urllib.parse.quote(slug)}")
         if path == "/run":
             slug = fields.get("slug", "")
-            channel = fields.get("channel", "etsy")
+            channel = fields.get("channel", "ebay")
             action = fields.get("action", "preview")
             cmd, out = run_script(slug, channel, action)
             if action == "preview" and "Wrote" in out:
