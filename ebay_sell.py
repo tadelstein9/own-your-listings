@@ -114,9 +114,11 @@ def build_offer(slug, gi, meta, app, qty):
         "categoryId": str(meta.get("category_id") or gi.get("category_id")),
         "listingDescription": meta.get("description") or gi.get("description"),
         "listingPolicies": {
-            "fulfillmentPolicyId": app["fulfillment_policy_id"],
-            "paymentPolicyId": app["payment_policy_id"],
-            "returnPolicyId": app["return_policy_id"],
+            # meta overrides app per-item (e.g. an eBay Standard Envelope shipping policy
+            # for a small flat item), falling back to the ebay_app.json defaults.
+            "fulfillmentPolicyId": meta.get("fulfillment_policy_id", app["fulfillment_policy_id"]),
+            "paymentPolicyId": meta.get("payment_policy_id", app["payment_policy_id"]),
+            "returnPolicyId": meta.get("return_policy_id", app["return_policy_id"]),
             # Best Offer is a free negotiation/surfacing lever -- on by default (meta can disable).
             "bestOfferTerms": {"bestOfferEnabled": bool(meta.get("best_offer", True))},
         },
@@ -165,7 +167,8 @@ def list_item(token, slug, dry_run, force=False):
     print(f"Category   : {offer['categoryId']}")
     print(f"Images     : {len(inv['product']['imageUrls'])}")
     print(f"Aspects    : {len(inv['product']['aspects'])}")
-    print(f"Policies   : fulfill {app['fulfillment_policy_id']} / pay {app['payment_policy_id']} / return {app['return_policy_id']}   loc {app['merchant_location_key']}")
+    lp = offer["listingPolicies"]
+    print(f"Policies   : fulfill {lp['fulfillmentPolicyId']} / pay {lp['paymentPolicyId']} / return {lp['returnPolicyId']}   loc {app['merchant_location_key']}")
     if dry_run:
         print("\n--dry-run: nothing sent.")
         return
